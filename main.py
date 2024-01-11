@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from sqlalchemy import UniqueConstraint
 
 from dataclasses import dataclass
 import requests
@@ -22,17 +21,16 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=False)
     title = db.Column(db.String(200))
     image = db.Column(db.String(200))
-@dataclass
+
 class ProductUser(db.Model):
-    id: int
-    user_id: int
-    product_id: int
+    # TO_DEBUG: UniqueConstraint is not working as expected. Correct it.
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'product_id', name='user_product_unique'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer)
     product_id = db.Column(db.Integer)
-
-    UniqueConstraint('user_id', 'product_id', name='user_product_unique')
 
 @app.route('/api/products')
 def index():
@@ -42,14 +40,15 @@ def index():
 def like_product(pk):
     req = requests.get('http://docker.for.mac.localhost:8000/api/user/')
     json = req.json()
+    print(json,pk)
     try:
         productUser = ProductUser(user_id=json['id'],product_id=pk)
-        db.session.add(productUser)
-        db.session.commit()
-
-        publish('product_liked',pk)
+        if productUser:
+            db.session.add(productUser)
+            db.session.commit()
+            publish('product_liked', pk)
     except:
-        abort('400', 'You already liked this product')
+        abort(400, {"error": "You already liked this product"})
     return jsonify({
         'message': 'Successfully liked post'
     })
